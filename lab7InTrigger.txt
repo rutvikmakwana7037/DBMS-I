@@ -1,0 +1,141 @@
+======================= PART - A =======================
+
+                                1.
+CREATE TRIGGER trg_BlockStudentDelete
+ON STUDENT
+INSTEAD OF DELETE
+AS
+BEGIN
+    PRINT 'Student deletion is not allowed!';
+END;
+
+                                2.
+CREATE TRIGGER trg_BlockCourseChange
+ON COURSE
+INSTEAD OF INSERT, UPDATE, DELETE
+AS
+BEGIN
+    PRINT 'Course table is read-only. Changes are not allowed!';
+END;
+
+                              3.
+CREATE TRIGGER trg_BlockFacultyDelete
+ON FACULTY
+INSTEAD OF DELETE
+AS
+BEGIN
+    PRINT 'Faculty removal is not permitted!';
+END;
+
+                              4.
+CREATE TRIGGER trg_LogCourseOps
+ON COURSE
+INSTEAD OF INSERT, UPDATE, DELETE
+AS
+BEGIN
+    INSERT INTO Log(LogMessage, logDate)
+    SELECT 'Attempted operation on COURSE table', GETDATE();
+    PRINT 'INSERT/UPDATE/DELETE operations are blocked for COURSE table!';
+END;
+
+                              5.
+CREATE TRIGGER trg_BlockEnrollmentYearUpdate
+ON STUDENT
+INSTEAD OF UPDATE
+AS
+BEGIN
+    IF UPDATE(StuEnrollmentYear)
+        PRINT 'Students are not allowed to update their enrollment year!';
+    ELSE
+        UPDATE STUDENT
+        SET StuName = i.StuName, StuEmail = i.StuEmail, StuPhone = i.StuPhone
+        FROM STUDENT s
+        JOIN INSERTED i ON s.StudentID = i.StudentID;
+END;
+
+                               6.
+CREATE TRIGGER trg_ValidateStudentAge
+ON STUDENT
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM INSERTED
+        WHERE DATEDIFF(YEAR, StuDateOfBirth, GETDATE()) < 18
+    )
+    BEGIN
+        RAISERROR('Student must be at least 18 years old!', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+======================= PART - B =======================
+
+                                  7.
+CREATE TRIGGER trg_UniqueFacultyEmail
+ON FACULTY
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    IF EXISTS (
+        SELECT FacultyEmail
+        FROM FACULTY
+        GROUP BY FacultyEmail
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        RAISERROR('Duplicate Faculty Email not allowed!', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+                                         8.
+CREATE TRIGGER trg_PreventDuplicateEnrollment
+ON ENROLLMENT
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT StudentID, CourseID
+        FROM ENROLLMENT
+        GROUP BY StudentID, CourseID
+        HAVING COUNT(*) > 1
+    )
+    BEGIN
+        RAISERROR('Duplicate enrollment not allowed!', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+======================= PART - C =======================
+
+                                 9.
+CREATE TRIGGER trg_RestrictEnrollmentMonth
+ON ENROLLMENT
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM INSERTED
+        WHERE MONTH(EnrollmentDate) NOT BETWEEN 1 AND 8
+    )
+    BEGIN
+        RAISERROR('Enrollment closed. Allowed only Jan–Aug!', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+                                  10.
+CREATE TRIGGER trg_AllowOnlyGradeUpdate
+ON ENROLLMENT
+INSTEAD OF UPDATE
+AS
+BEGIN
+    IF UPDATE(Grade)
+        UPDATE ENROLLMENT
+        SET Grade = i.Grade
+        FROM ENROLLMENT e
+        JOIN INSERTED i ON e.EnrollmentID = i.EnrollmentID;
+    ELSE
+        PRINT 'Only Grade updates are allowed. Other changes are blocked!';
+END;
